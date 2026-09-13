@@ -1,0 +1,39 @@
+# Maven
+target/
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Docker
+docker-data/
+
+# Env
+.env
+
+docs/
+# Dependencies
+node_modules/
+
+# Trae
+.trae/
+
+# Dependencies
+node_modules/
+
+# Trae
+.trae/
