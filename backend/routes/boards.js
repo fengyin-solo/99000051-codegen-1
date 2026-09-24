@@ -15,9 +15,9 @@ router.get('/', (req, res) => {
       SELECT b.*, 
         (SELECT COUNT(*) FROM columns WHERE board_id = b.id) AS column_count,
         (SELECT COUNT(*) FROM cards c JOIN columns col ON c.column_id = col.id WHERE col.board_id = b.id) AS card_count
-      FROM boards b 
-      WHERE b.user_id = ? 
-      ORDER BY b.created_at DESC
+      FROM boards b
+      WHERE b.user_id = ?
+      ORDER BY b.created_at DESC, b.id DESC
     `).all(req.user.id);
     db.close();
     res.json(boards);
