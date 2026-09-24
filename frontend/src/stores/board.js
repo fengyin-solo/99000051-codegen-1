@@ -122,23 +122,22 @@ export const useBoardStore = defineStore('board', () => {
 
   async function moveCard(cardId, targetColumnId, position) {
     const res = await cardApi.move(cardId, targetColumnId, position)
-    // Remove card from old column and add to new column
-    let movedCard = null
+    // The server clamps the position into the valid range (e.g. after a card
+    // was deleted), so trust the returned card when re-syncing local state.
+    const moved = res.data
+    let cardToPlace = null
     for (const colId in cards.value) {
       const idx = cards.value[colId].findIndex(c => c.id === cardId)
       if (idx !== -1) {
-        movedCard = cards.value[colId].splice(idx, 1)[0]
+        cardToPlace = cards.value[colId].splice(idx, 1)[0]
         break
       }
     }
-    if (movedCard) {
-      movedCard.column_id = targetColumnId
-      movedCard.position = position
-      if (!cards.value[targetColumnId]) cards.value[targetColumnId] = []
-      // Insert at position
-      cards.value[targetColumnId].splice(position, 0, movedCard)
-    }
-    return res.data
+    if (!cardToPlace) cardToPlace = moved
+    if (!cards.value[moved.column_id]) cards.value[moved.column_id] = []
+    const insertAt = Math.min(Math.max(moved.position, 0), cards.value[moved.column_id].length)
+    cards.value[moved.column_id].splice(insertAt, 0, { ...cardToPlace, ...moved })
+    return moved
   }
 
   function clearBoard() {

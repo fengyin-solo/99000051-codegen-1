@@ -192,25 +192,51 @@ router.put('/cards/:id/move', (req, res) => {
     const oldColumnId = card.column_id;
     const oldPosition = card.position;
 
-    // Get max position in target column
-    const maxPos = db.prepare('SELECT MAX(position) AS maxPos FROM cards WHERE column_id = ?').get(columnId);
-    const newPosition = position !== undefined ? Math.min(position, (maxPos.maxPos ?? -1) + 1) : (maxPos.maxPos ?? -1) + 1;
+    // Valid target range depends on whether the card already lives in that column:
+    // moving out of its old column frees one slot, so same-column moves allow one
+    // fewer index. Clamp both ends so a stale/over-deleted index can never produce
+    // gaps or negative positions.
+    const countRow = db.prepare('SELECT COUNT(*) AS cnt FROM cards WHERE column_id = ?').get(columnId);
+    const totalInTarget = countRow.cnt;
+    const maxIndex = totalInTarget - (oldColumnId === columnId ? 1 : 0);
 
-    // Remove card from old position (shift cards down in old column)
-    db.prepare(`
-      UPDATE cards SET position = position - 1 
-      WHERE column_id = ? AND position > ?
-    `).run(oldColumnId, oldPosition);
+    let newPosition;
+    if (typeof position !== 'number' || Number.isNaN(position)) {
+      newPosition = Math.max(maxIndex, 0);
+    } else {
+      newPosition = Math.min(Math.max(position, 0), Math.max(maxIndex, 0));
+    }
 
-    // Make room in target column (shift cards up in target column)
-    db.prepare(`
-      UPDATE cards SET position = position + 1 
-      WHERE column_id = ? AND position >= ?
-    `).run(columnId, newPosition);
+    if (oldColumnId === columnId) {
+      // Reordering within the same column: shift cards between old and new slot.
+      if (newPosition > oldPosition) {
+        db.prepare(`
+          UPDATE cards SET position = position - 1
+          WHERE column_id = ? AND position > ? AND position <= ?
+        `).run(columnId, oldPosition, newPosition);
+      } else if (newPosition < oldPosition) {
+        db.prepare(`
+          UPDATE cards SET position = position + 1
+          WHERE column_id = ? AND position >= ? AND position < ?
+        `).run(columnId, newPosition, oldPosition);
+      }
+    } else {
+      // Remove card from old position (shift cards down in old column)
+      db.prepare(`
+        UPDATE cards SET position = position - 1
+        WHERE column_id = ? AND position > ?
+      `).run(oldColumnId, oldPosition);
+
+      // Make room in target column (shift cards up in target column)
+      db.prepare(`
+        UPDATE cards SET position = position + 1
+        WHERE column_id = ? AND position >= ?
+      `).run(columnId, newPosition);
+    }
 
     // Move the card
     db.prepare(`
-      UPDATE cards SET column_id = ?, position = ?, updated_at = datetime('now') 
+      UPDATE cards SET column_id = ?, position = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(columnId, newPosition, req.params.id);
 

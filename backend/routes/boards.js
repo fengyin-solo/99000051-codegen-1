@@ -7,17 +7,28 @@ const router = express.Router();
 // All board routes require authentication
 router.use(authMiddleware);
 
+// Select a board together with its column/card counts
+function selectBoardWithCounts(db, boardId) {
+  return db.prepare(`
+    SELECT b.*,
+      (SELECT COUNT(*) FROM columns WHERE board_id = b.id) AS column_count,
+      (SELECT COUNT(*) FROM cards c JOIN columns col ON c.column_id = col.id WHERE col.board_id = b.id) AS card_count
+    FROM boards b
+    WHERE b.id = ?
+  `).get(boardId);
+}
+
 // GET /api/boards - List user's boards
 router.get('/', (req, res) => {
   const db = getDb();
   try {
     const boards = db.prepare(`
-      SELECT b.*, 
+      SELECT b.*,
         (SELECT COUNT(*) FROM columns WHERE board_id = b.id) AS column_count,
         (SELECT COUNT(*) FROM cards c JOIN columns col ON c.column_id = col.id WHERE col.board_id = b.id) AS card_count
-      FROM boards b 
-      WHERE b.user_id = ? 
-      ORDER BY b.created_at DESC
+      FROM boards b
+      WHERE b.user_id = ?
+      ORDER BY b.created_at DESC, b.id DESC
     `).all(req.user.id);
     db.close();
     res.json(boards);
@@ -49,7 +60,7 @@ router.post('/', (req, res) => {
     insertCol.run(boardId, 'In Progress', 1);
     insertCol.run(boardId, 'Done', 2);
 
-    const board = db.prepare('SELECT * FROM boards WHERE id = ?').get(boardId);
+    const board = selectBoardWithCounts(db, boardId);
     db.close();
     res.status(201).json(board);
   } catch (err) {

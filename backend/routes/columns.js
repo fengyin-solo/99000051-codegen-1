@@ -97,9 +97,12 @@ router.put('/columns/:id', (req, res) => {
     }
 
     if (position !== undefined) {
-      // Reorder: shift other columns
+      // Clamp into the valid range so stale positions (e.g. after a column was
+      // deleted) cannot create gaps or negative ordering.
+      const countRow = db.prepare('SELECT COUNT(*) AS cnt FROM columns WHERE board_id = ?').get(column.board_id);
+      const maxPos = Math.max(countRow.cnt - 1, 0);
+      const newPos = Math.min(Math.max(Number.isInteger(position) ? position : 0, 0), maxPos);
       const oldPos = column.position;
-      const newPos = position;
 
       if (oldPos !== newPos) {
         if (newPos > oldPos) {
